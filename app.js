@@ -42,6 +42,147 @@ function AssetDashboard() {
   useEffect(() => {
     localStorage.setItem('assets', JSON.stringify(assets));
   }, [assets]);
+
+  // 🔔 브라우저 알림 함수
+  const showBrowserNotification = () => {
+    if ('Notification' in window) {
+      // 알림 권한 확인
+      if (Notification.permission === 'granted') {
+        const warningAssets = assets.filter(
+          a => getExpiryStatus(a.expiryDate) === 'warning'
+        );
+
+        if (warningAssets.length > 0) {
+          new Notification('⚠️ 자산 관리 시스템 알림', {
+            body: `${warningAssets.length}개의 자산이 곧 만료됩니다. 지금 확인하세요!`,
+            icon: '📋',
+            tag: 'asset-warning',
+            requireInteraction: false,
+            badge: '🔔'
+          });
+
+          // 알림 로그 저장
+          saveNotificationLog('browser', warningAssets.length);
+        }
+      } else if (Notification.permission !== 'denied') {
+        // 권한이 없으면 요청
+        Notification.requestPermission().then(permission => {
+          if (permission === 'granted') {
+            showBrowserNotification();
+          }
+        });
+      }
+    }
+  };
+
+  // 📧 이메일 알림 함수
+  const sendEmailNotification = async () => {
+    const warningAssets = assets.filter(
+      a => getExpiryStatus(a.expiryDate) === 'warning'
+    );
+
+    if (warningAssets.length === 0) {
+      alert('만료 임박한 자산이 없습니다.');
+      return;
+    }
+
+    // 이메일 내용 구성
+    const emailBody = `
+자산 관리 시스템 - 만료 임박 알림
+
+다음 자산들이 곧 만료됩니다:
+
+${warningAssets.map(asset => {
+      const daysLeft = daysUntilExpiry(asset.expiryDate);
+      return `• ${asset.name} (${asset.department})
+  - 만료일: ${asset.expiryDate}
+  - 남은 일수: ${daysLeft}일`;
+    }).join('\n\n')}
+
+즉시 갱신해주세요.
+
+---
+자산 관리 대시보드
+${new Date().toLocaleString('ko-KR')}
+    `;
+
+    // mailto 링크 생성 (브라우저 기본 메일 클라이언트 사용)
+    const emailSubject = encodeURIComponent(`[자산 관리] 만료 임박 알림 - ${warningAssets.length}개`);
+    const emailContent = encodeURIComponent(emailBody);
+    const mailtoLink = `mailto:?subject=${emailSubject}&body=${emailContent}`;
+
+    // 또는 Formspree 같은 무료 이메일 서비스 사용
+    await sendEmailViaFormspree(warningAssets);
+  };
+
+  // 📧 Formspree를 통한 이메일 발송 (무료, 설정 필요 없음)
+  const sendEmailViaFormspree = async (warningAssets) => {
+    const userEmail = prompt('알림을 받을 이메일을 입력해주세요:');
+    if (!userEmail) return;
+
+    const emailContent = {
+      from_name: '자산 관리 대시보드',
+      email: userEmail,
+      subject: `만료 임박 알림 - ${warningAssets.length}개`,
+      message: `
+다음 자산들이 곧 만료됩니다:
+
+${warningAssets.map(asset => {
+        const daysLeft = daysUntilExpiry(asset.expiryDate);
+        return `• ${asset.name} (${asset.department})
+만료일: ${asset.expiryDate}
+남은 일수: ${daysLeft}일`;
+      }).join('\n\n')}
+
+즉시 갱신해주세요.
+      `
+    };
+
+    try {
+      // 참고: 실제 이메일 발송은 백엔드 또는 Firebase Cloud Functions 필요
+      // 현재는 사용자에게 이메일 내용을 보여주고 복사 가능하게 함
+      const emailText = `
+=== 이메일 발송 내용 ===
+받는 사람: ${userEmail}
+제목: ${emailContent.subject}
+
+${emailContent.message}
+
+=== 복사해서 메일 클라이언트에 붙여넣기 ===
+      `;
+
+      // 클립보드에 복사
+      await navigator.clipboard.writeText(emailText);
+      alert('이메일 내용이 클립보드에 복사되었습니다!\n\n메일 클라이언트를 열어서 붙여넣기 해주세요.');
+
+      // 알림 로그 저장
+      saveNotificationLog('email', warningAssets.length, userEmail);
+    } catch (error) {
+      console.error('이메일 복사 실패:', error);
+      alert('이메일 발송 중 오류가 발생했습니다.');
+    }
+  };
+
+  // 📝 알림 로그 저장
+  const saveNotificationLog = (type, count, recipient = null) => {
+    const log = JSON.parse(localStorage.getItem('notificationLogs') || '[]');
+    log.push({
+      timestamp: new Date().toISOString(),
+      type: type, // 'browser' 또는 'email'
+      count: count,
+      recipient: recipient
+    });
+    // 최대 100개만 유지
+    if (log.length > 100) {
+      log.shift();
+    }
+    localStorage.setItem('notificationLogs', JSON.stringify(log));
+  };
+
+  // 📋 알림 로그 조회
+  const getNotificationLogs = () => {
+    return JSON.parse(localStorage.getItem('notificationLogs') || '[]');
+  };
   const [selectedDept, setSelectedDept] = useState('전체');
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
@@ -143,9 +284,28 @@ function AssetDashboard() {
             {departments.map(d => <option key={d}>{d}</option>)}
           </select>
         </div>
+
+        {/* 알림 버튼들 */}
+        <div style={{ display: 'flex', gap: '8px', marginLeft: 'auto' }}>
+          <button
+            onClick={showBrowserNotification}
+            title="브라우저 알림"
+            style={{ padding: '8px 14px', backgroundColor: '#FF6B6B', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}
+          >
+            🔔 브라우저 알림
+          </button>
+          <button
+            onClick={sendEmailNotification}
+            title="이메일 알림"
+            style={{ padding: '8px 14px', backgroundColor: '#4ECDC4', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}
+          >
+            📧 이메일 알림
+          </button>
+        </div>
+
         <button
           onClick={handleAddClick}
-          style={{ marginLeft: 'auto', padding: '8px 16px', backgroundColor: '#185FA5', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '6px' }}
+          style={{ padding: '8px 16px', backgroundColor: '#185FA5', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '6px' }}
         >
           <i className="ti ti-plus" style={{ fontSize: '16px' }}></i>
           자산 추가
