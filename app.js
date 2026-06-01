@@ -24,51 +24,23 @@ function AssetDashboard() {
     { id: 13, name: '프로젝터 & 스크린', type: '사무장비', department: '홍보실', status: '정상', expiryDate: '2027-05-15', category: '사무용품', location: '2층 회의실' },
   ];
 
-  const [assets, setAssets] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  // 🔥 Firebase에서 데이터 불러오기 및 실시간 동기화
-  useEffect(() => {
-    if (!window.firebaseDB) {
-      console.error('Firebase가 초기화되지 않았습니다.');
-      setAssets(initialAssets);
-      setLoading(false);
-      return;
-    }
-
-    const db = window.firebaseDB;
-    const assetsRef = db.ref('assets');
-
-    // Firebase에서 실시간 데이터 수신
-    assetsRef.on('value', (snapshot) => {
-      const data = snapshot.val();
-      if (data) {
-        const assetsArray = Array.isArray(data) ? data : Object.values(data);
-        setAssets(assetsArray);
-        localStorage.setItem('assets', JSON.stringify(assetsArray));
-      } else {
-        // Firebase에 데이터가 없으면 초기 데이터 저장
-        assetsRef.set(initialAssets);
-        setAssets(initialAssets);
+  const [assets, setAssets] = useState(() => {
+    // 📥 LocalStorage에서 저장된 데이터 불러오기
+    const saved = localStorage.getItem('assets');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error('LocalStorage 데이터 로드 실패:', e);
+        return initialAssets;
       }
-      setLoading(false);
-    });
-
-    return () => {
-      assetsRef.off('value');
-    };
-  }, []);
-
-  // 💾 assets가 변경될 때 Firebase와 LocalStorage에 저장
-  useEffect(() => {
-    if (assets.length > 0 && window.firebaseDB) {
-      const db = window.firebaseDB;
-      const assetsRef = db.ref('assets');
-      assetsRef.set(assets).catch((error) => {
-        console.error('Firebase 저장 실패:', error);
-      });
-      localStorage.setItem('assets', JSON.stringify(assets));
     }
+    return initialAssets;
+  });
+
+  // 💾 assets가 변경될 때마다 LocalStorage에 저장
+  useEffect(() => {
+    localStorage.setItem('assets', JSON.stringify(assets));
   }, [assets]);
 
   // 🔔 브라우저 알림 함수
