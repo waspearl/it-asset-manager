@@ -37,7 +37,29 @@
 <body>
     <div id="root"></div>
     
-    <!-- React 라이브러리 CDN (unpkg - 더 안정적) -->
+    <!-- Firebase SDK (CDN) -->
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/10.7.0/firebase-database.js"></script>
+
+    <!-- Firebase 초기화 -->
+    <script>
+        const firebaseConfig = {
+            apiKey: "AIzaSyD-a2D3x0vix7AuO3l3UgDfwAR6JU0UoXA",
+            authDomain: "it-asset-manager-932b0.firebaseapp.com",
+            databaseURL: "https://it-asset-manager-932b0-default-rtdb.firebaseio.com",
+            projectId: "it-asset-manager-932b0",
+            storageBucket: "it-asset-manager-932b0.appspot.com",
+            messagingSenderId: "800093002825",
+            appId: "1:800093002825:web:44381b198b3132b212b398",
+            measurementId: "G-35WB0GLTK2"
+        };
+
+        // Firebase 초기화
+        firebase.initializeApp(firebaseConfig);
+        window.firebaseDB = firebase.database();
+    </script>
+    
+    <!-- React 라이브러리 CDN (unpkg) -->
     <script crossorigin src="https://unpkg.com/react@18/umd/react.production.min.js"></script>
     <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js"></script>
     
@@ -45,6 +67,6 @@
     <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
     
     <!-- 메인 앱 스크립트 -->
-    <script type="text/babel" src="app.js"></script>
+    <script type="text/babel" src="app-firebase.js"></script>
 </body>
 </html>
