@@ -1,4 +1,4 @@
-const { useState } = React;
+const { useState, useEffect } = React;
 
 function AssetDashboard() {
   const departments = ['정보화사업처', '경영지원실', '홍보실'];
@@ -24,7 +24,24 @@ function AssetDashboard() {
     { id: 13, name: '프로젝터 & 스크린', type: '사무장비', department: '홍보실', status: '정상', expiryDate: '2027-05-15', category: '사무용품', location: '2층 회의실' },
   ];
 
-  const [assets, setAssets] = useState(initialAssets);
+  const [assets, setAssets] = useState(() => {
+    // 📥 LocalStorage에서 저장된 데이터 불러오기
+    const saved = localStorage.getItem('assets');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        console.error('LocalStorage 데이터 로드 실패:', e);
+        return initialAssets;
+      }
+    }
+    return initialAssets;
+  });
+
+  // 💾 assets가 변경될 때마다 LocalStorage에 저장
+  useEffect(() => {
+    localStorage.setItem('assets', JSON.stringify(assets));
+  }, [assets]);
   const [selectedDept, setSelectedDept] = useState('전체');
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
