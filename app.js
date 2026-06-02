@@ -4,28 +4,22 @@ function AssetDashboard() {
   const departments = ['정보화사업처', '경영지원실', '홍보실'];
   
   const initialAssets = [
-    // 정보화사업처
     { id: 1, name: '개발용 PC #1', type: '컴퓨터', department: '정보화사업처', status: '정상', expiryDate: '2026-08-15', category: '하드웨어', location: '4층' },
     { id: 2, name: '개발용 PC #2', type: '컴퓨터', department: '정보화사업처', status: '정상', expiryDate: '2026-09-20', category: '하드웨어', location: '4층' },
     { id: 3, name: 'IntelliJ IDEA 라이선스 (5개)', type: '소프트웨어', department: '정보화사업처', status: '정상', expiryDate: '2026-06-10', category: '라이선스', location: 'N/A' },
     { id: 4, name: 'L3 스위치 장비 #001', type: '네트워크 장비', department: '정보화사업처', status: '정상', expiryDate: '2028-12-31', category: '인프라', location: '1층 서버실' },
     { id: 5, name: 'L3 스위치 장비 #002', type: '네트워크 장비', department: '정보화사업처', status: '정상', expiryDate: '2029-06-15', category: '인프라', location: '1층 서버실' },
-    
-    // 경영지원실
     { id: 6, name: '사무용 노트북 #1', type: '컴퓨터', department: '경영지원실', status: '정상', expiryDate: '2026-07-30', category: '하드웨어', location: '3층' },
     { id: 7, name: '사무용 노트북 #2', type: '컴퓨터', department: '경영지원실', status: '정상', expiryDate: '2026-10-15', category: '하드웨어', location: '3층' },
     { id: 8, name: '한컴오피스 2024 (10라이선스)', type: '소프트웨어', department: '경영지원실', status: '만료임박', expiryDate: '2026-06-05', category: '라이선스', location: 'N/A' },
     { id: 9, name: '공용 복합기 MFP-2024', type: '사무장비', department: '경영지원실', status: '정상', expiryDate: '2027-03-20', category: '사무용품', location: '3층 전산실' },
     { id: 10, name: '공용 복합기 유지보수', type: '서비스', department: '경영지원실', status: '정상', expiryDate: '2026-12-31', category: '서비스', location: '3층' },
-    
-    // 홍보실
     { id: 11, name: '디자인용 iMac 27"', type: '컴퓨터', department: '홍보실', status: '정상', expiryDate: '2026-11-10', category: '하드웨어', location: '2층' },
     { id: 12, name: '어도비 크리에이티브 클라우드 (3라이선스)', type: '소프트웨어', department: '홍보실', status: '만료임박', expiryDate: '2026-06-18', category: '라이선스', location: 'N/A' },
     { id: 13, name: '프로젝터 & 스크린', type: '사무장비', department: '홍보실', status: '정상', expiryDate: '2027-05-15', category: '사무용품', location: '2층 회의실' },
   ];
 
   const [assets, setAssets] = useState(() => {
-    // 📥 LocalStorage에서 저장된 데이터 불러오기
     const saved = localStorage.getItem('assets');
     if (saved) {
       try {
@@ -38,491 +32,451 @@ function AssetDashboard() {
     return initialAssets;
   });
 
-  // 💾 assets가 변경될 때마다 LocalStorage에 저장
+  const [selectedDepartment, setSelectedDepartment] = useState('전체');
+  const [showModal, setShowModal] = useState(false);
+  const [editingAsset, setEditingAsset] = useState(null);
+
+  // 💾 데이터 저장 시 검증
   useEffect(() => {
-    localStorage.setItem('assets', JSON.stringify(assets));
+    try {
+      if (!Array.isArray(assets)) {
+        console.error('❌ 에러: assets는 배열이어야 합니다.');
+        return;
+      }
+
+      const isValid = assets.every(asset => 
+        asset.id !== undefined &&
+        typeof asset.id === 'number' &&
+        typeof asset.name === 'string' &&
+        typeof asset.expiryDate === 'string'
+      );
+
+      if (!isValid) {
+        console.error('❌ 에러: 데이터 형식이 올바르지 않습니다.');
+        return;
+      }
+
+      localStorage.setItem('assets', JSON.stringify(assets));
+      console.log(`✅ ${assets.length}개 자산 저장 완료`);
+    } catch (error) {
+      console.error('❌ LocalStorage 저장 실패:', error);
+    }
   }, [assets]);
 
-  // 🔔 브라우저 알림 함수
-  const showBrowserNotification = () => {
-    if ('Notification' in window) {
-      // 알림 권한 확인
-      if (Notification.permission === 'granted') {
-        const warningAssets = assets.filter(
-          a => getExpiryStatus(a.expiryDate) === 'warning'
-        );
+  // 🔍 유효성 검사 함수
+  const validateAsset = (asset) => {
+    const errors = [];
 
-        if (warningAssets.length > 0) {
-          new Notification('⚠️ 자산 관리 시스템 알림', {
-            body: `${warningAssets.length}개의 자산이 곧 만료됩니다. 지금 확인하세요!`,
-            icon: '📋',
-            tag: 'asset-warning',
-            requireInteraction: false,
-            badge: '🔔'
-          });
+    if (!asset.name || asset.name.trim() === '') {
+      errors.push('자산명은 필수입니다.');
+    } else if (asset.name.length > 100) {
+      errors.push('자산명은 100자 이내여야 합니다.');
+    }
 
-          // 알림 로그 저장
-          saveNotificationLog('browser', warningAssets.length);
-        }
-      } else if (Notification.permission !== 'denied') {
-        // 권한이 없으면 요청
-        Notification.requestPermission().then(permission => {
-          if (permission === 'granted') {
-            showBrowserNotification();
-          }
-        });
+    if (!asset.type || asset.type.trim() === '') {
+      errors.push('자산 종류는 필수입니다.');
+    } else if (asset.type.length > 100) {
+      errors.push('자산 종류는 100자 이내여야 합니다.');
+    }
+
+    if (!asset.location || asset.location.trim() === '') {
+      errors.push('위치는 필수입니다.');
+    } else if (asset.location.length > 100) {
+      errors.push('위치는 100자 이내여야 합니다.');
+    }
+
+    if (!asset.expiryDate) {
+      errors.push('만료일은 필수입니다.');
+    } else {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const expiryDate = new Date(asset.expiryDate);
+      
+      if (expiryDate < today) {
+        errors.push('만료일은 오늘 이후여야 합니다.');
       }
     }
+
+    return {
+      isValid: errors.length === 0,
+      errors: errors
+    };
   };
 
-  // 📧 이메일 알림 함수
-  const sendEmailNotification = async () => {
-    const warningAssets = assets.filter(
-      a => getExpiryStatus(a.expiryDate) === 'warning'
-    );
+  // 🧹 데이터 정제 함수
+  const sanitizeAsset = (asset) => {
+    return {
+      id: asset.id || null,
+      name: (asset.name || '').trim().substring(0, 100),
+      type: (asset.type || '').trim().substring(0, 100),
+      department: asset.department || '',
+      status: asset.status || '정상',
+      expiryDate: asset.expiryDate || '',
+      category: asset.category || '',
+      location: (asset.location || '').trim().substring(0, 100)
+    };
+  };
 
-    if (warningAssets.length === 0) {
-      alert('만료 임박한 자산이 없습니다.');
+  // 📅 만료일까지의 일수 계산
+  const daysUntilExpiry = (expiryDate) => {
+    const today = new Date();
+    const expiry = new Date(expiryDate);
+    const diff = expiry - today;
+    return Math.ceil(diff / (1000 * 60 * 60 * 24));
+  };
+
+  // 상태 판별
+  const getExpiryStatus = (expiryDate) => {
+    const days = daysUntilExpiry(expiryDate);
+    if (days < 0) return 'expired';
+    if (days <= 30) return 'warning';
+    return 'normal';
+  };
+
+  // 필터링
+  const filteredAssets = selectedDepartment === '전체'
+    ? assets
+    : assets.filter(a => a.department === selectedDepartment);
+
+  // 통계
+  const stats = {
+    total: assets.length,
+    normal: assets.filter(a => getExpiryStatus(a.expiryDate) === 'normal').length,
+    warning: assets.filter(a => getExpiryStatus(a.expiryDate) === 'warning').length,
+  };
+
+  // ✅ 자산 저장 (검증 강화)
+  const handleSaveAsset = (asset) => {
+    // 1. 유효성 검사
+    const validation = validateAsset(asset);
+    if (!validation.isValid) {
+      alert('오류:\n' + validation.errors.join('\n'));
       return;
     }
 
-    // 이메일 내용 구성
-    const emailBody = `
-자산 관리 시스템 - 만료 임박 알림
+    // 2. 데이터 정제
+    const sanitized = sanitizeAsset(asset);
 
-다음 자산들이 곧 만료됩니다:
+    // 3. 수정 시: 원본 자산 확인
+    if (editingAsset) {
+      const originalExists = assets.some(a => a.id === editingAsset.id);
+      
+      if (!originalExists) {
+        alert('오류: 수정하려는 자산이 더 이상 존재하지 않습니다.');
+        setEditingAsset(null);
+        return;
+      }
 
-${warningAssets.map(asset => {
-      const daysLeft = daysUntilExpiry(asset.expiryDate);
-      return `• ${asset.name} (${asset.department})
-  - 만료일: ${asset.expiryDate}
-  - 남은 일수: ${daysLeft}일`;
-    }).join('\n\n')}
+      // ID 고정
+      sanitized.id = editingAsset.id;
 
-즉시 갱신해주세요.
+      setAssets(assets.map(a => 
+        a.id === editingAsset.id ? sanitized : a
+      ));
 
----
-자산 관리 대시보드
-${new Date().toLocaleString('ko-KR')}
-    `;
+      console.log(`✅ 자산 수정 완료: ID=${editingAsset.id}`);
+    } else {
+      // 4. 신규 등록
+      const newId = Math.max(...assets.map(a => a.id || 0), 0) + 1;
+      sanitized.id = newId;
 
-    // mailto 링크 생성 (브라우저 기본 메일 클라이언트 사용)
-    const emailSubject = encodeURIComponent(`[자산 관리] 만료 임박 알림 - ${warningAssets.length}개`);
-    const emailContent = encodeURIComponent(emailBody);
-    const mailtoLink = `mailto:?subject=${emailSubject}&body=${emailContent}`;
+      setAssets([...assets, sanitized]);
+      console.log(`✅ 자산 등록 완료: ID=${newId}`);
+    }
 
-    // 또는 Formspree 같은 무료 이메일 서비스 사용
-    await sendEmailViaFormspree(warningAssets);
+    setShowModal(false);
+    setEditingAsset(null);
   };
 
-  // 📧 Formspree를 통한 이메일 발송 (무료, 설정 필요 없음)
-  const sendEmailViaFormspree = async (warningAssets) => {
-    const userEmail = prompt('알림을 받을 이메일을 입력해주세요:');
-    if (!userEmail) return;
+  // 🗑️ 자산 삭제 (이중 확인)
+  const handleDeleteAsset = (id) => {
+    // 1. 자산 존재 확인
+    const assetToDelete = assets.find(a => a.id === id);
+    
+    if (!assetToDelete) {
+      alert('오류: 자산을 찾을 수 없습니다.');
+      return;
+    }
 
-    const emailContent = {
-      from_name: '자산 관리 대시보드',
-      email: userEmail,
-      subject: `만료 임박 알림 - ${warningAssets.length}개`,
-      message: `
-다음 자산들이 곧 만료됩니다:
+    // 2. 명확한 확인 메시지
+    const confirmed = confirm(
+      `다음 자산을 삭제하시겠습니까?\n\n` +
+      `자산명: ${assetToDelete.name}\n` +
+      `부서: ${assetToDelete.department}\n` +
+      `만료일: ${assetToDelete.expiryDate}\n\n` +
+      `(이 작업은 되돌릴 수 없습니다.)`
+    );
 
-${warningAssets.map(asset => {
-        const daysLeft = daysUntilExpiry(asset.expiryDate);
-        return `• ${asset.name} (${asset.department})
-만료일: ${asset.expiryDate}
-남은 일수: ${daysLeft}일`;
-      }).join('\n\n')}
+    if (confirmed) {
+      // 3. 최종 확인
+      const finalAsset = assets.find(a => a.id === id);
+      
+      if (!finalAsset) {
+        alert('오류: 자산이 이미 삭제되었습니다.');
+        return;
+      }
 
-즉시 갱신해주세요.
-      `
-    };
-
-    try {
-      // 참고: 실제 이메일 발송은 백엔드 또는 Firebase Cloud Functions 필요
-      // 현재는 사용자에게 이메일 내용을 보여주고 복사 가능하게 함
-      const emailText = `
-=== 이메일 발송 내용 ===
-받는 사람: ${userEmail}
-제목: ${emailContent.subject}
-
-${emailContent.message}
-
-=== 복사해서 메일 클라이언트에 붙여넣기 ===
-      `;
-
-      // 클립보드에 복사
-      await navigator.clipboard.writeText(emailText);
-      alert('이메일 내용이 클립보드에 복사되었습니다!\n\n메일 클라이언트를 열어서 붙여넣기 해주세요.');
-
-      // 알림 로그 저장
-      saveNotificationLog('email', warningAssets.length, userEmail);
-    } catch (error) {
-      console.error('이메일 복사 실패:', error);
-      alert('이메일 발송 중 오류가 발생했습니다.');
+      setAssets(assets.filter(a => a.id !== id));
+      console.log(`✅ 자산 삭제 완료: ID=${id}, 이름=${finalAsset.name}`);
     }
   };
 
-  // 📝 알림 로그 저장
-  const saveNotificationLog = (type, count, recipient = null) => {
-    const log = JSON.parse(localStorage.getItem('notificationLogs') || '[]');
-    log.push({
-      timestamp: new Date().toISOString(),
-      type: type, // 'browser' 또는 'email'
-      count: count,
-      recipient: recipient
-    });
-    // 최대 100개만 유지
-    if (log.length > 100) {
-      log.shift();
-    }
-    localStorage.setItem('notificationLogs', JSON.stringify(log));
-  };
+  return (
+    <div style={styles.container}>
+      <header style={styles.header}>
+        <h1>부서별 자산 및 라이선스 통합 관리 대시보드</h1>
+      </header>
 
-  // 📋 알림 로그 조회
-  const getNotificationLogs = () => {
-    return JSON.parse(localStorage.getItem('notificationLogs') || '[]');
-  };
-  const [selectedDept, setSelectedDept] = useState('전체');
-  const [showModal, setShowModal] = useState(false);
-  const [editingId, setEditingId] = useState(null);
-  const [formData, setFormData] = useState({
+      <div style={styles.toolbar}>
+        <select
+          value={selectedDepartment}
+          onChange={(e) => setSelectedDepartment(e.target.value)}
+          style={styles.select}
+        >
+          <option value="전체">전체</option>
+          {departments.map(dept => (
+            <option key={dept} value={dept}>{dept}</option>
+          ))}
+        </select>
+
+        <button onClick={() => { setEditingAsset(null); setShowModal(true); }} style={styles.addButton}>
+          ➕ 자산 추가
+        </button>
+      </div>
+
+      <div style={styles.statsContainer}>
+        <div style={styles.statCard}>
+          <div style={styles.statValue}>{stats.total}</div>
+          <div style={styles.statLabel}>총 자산 수</div>
+        </div>
+        <div style={styles.statCard}>
+          <div style={styles.statValue}>{stats.normal}</div>
+          <div style={styles.statLabel}>정상 운용</div>
+        </div>
+        <div style={{...styles.statCard, borderColor: '#FF6B6B'}}>
+          <div style={{...styles.statValue, color: '#FF6B6B'}}>{stats.warning}</div>
+          <div style={styles.statLabel}>만료 임박</div>
+        </div>
+      </div>
+
+      <div style={styles.tableContainer}>
+        <table style={styles.table}>
+          <thead>
+            <tr style={styles.tableHeader}>
+              <th>자산명</th>
+              <th>유형</th>
+              <th>부서</th>
+              <th>만료일</th>
+              <th>상태</th>
+              <th>작업</th>
+            </tr>
+          </thead>
+          <tbody>
+            {filteredAssets.map(asset => {
+              const status = getExpiryStatus(asset.expiryDate);
+              const daysLeft = daysUntilExpiry(asset.expiryDate);
+              return (
+                <tr key={asset.id} style={{...styles.tableRow, ...(status === 'warning' ? styles.warningRow : {})}}>
+                  <td>{asset.name}</td>
+                  <td>{asset.type}</td>
+                  <td>{asset.department}</td>
+                  <td>{asset.expiryDate}</td>
+                  <td>
+                    {status === 'warning' && <span style={{color: '#FF6B6B'}}>⚠️ {daysLeft}일</span>}
+                    {status === 'normal' && <span style={{color: '#2ECC71'}}>정상</span>}
+                    {status === 'expired' && <span style={{color: '#E74C3C'}}>만료됨</span>}
+                  </td>
+                  <td>
+                    <button onClick={() => { setEditingAsset(asset); setShowModal(true); }} style={styles.actionButton}>
+                      ✏️
+                    </button>
+                    <button onClick={() => handleDeleteAsset(asset.id)} style={styles.deleteButton}>
+                      🗑️
+                    </button>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+
+      {showModal && (
+        <AssetModal
+          asset={editingAsset}
+          onSave={handleSaveAsset}
+          onClose={() => { setShowModal(false); setEditingAsset(null); }}
+          validateAsset={validateAsset}
+        />
+      )}
+    </div>
+  );
+}
+
+function AssetModal({ asset, onSave, onClose, validateAsset }) {
+  const [formData, setFormData] = useState(asset || {
     name: '',
     type: '',
-    department: '정보화사업처',
+    department: '',
     status: '정상',
     expiryDate: '',
     category: '',
     location: ''
   });
 
-  const filteredAssets = selectedDept === '전체'
-    ? assets
-    : assets.filter(a => a.department === selectedDept);
+  const [errors, setErrors] = useState([]);
 
-  const daysUntilExpiry = (dateStr) => {
-    const today = new Date();
-    const expiry = new Date(dateStr);
-    const diff = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
-    return diff;
+  const handleChange = (e) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
   };
 
-  const getExpiryStatus = (dateStr) => {
-    const days = daysUntilExpiry(dateStr);
-    if (days <= 0) return 'expired';
-    if (days <= 30) return 'warning';
-    return 'normal';
-  };
-
-  const stats = {
-    total: filteredAssets.length,
-    normal: filteredAssets.filter(a => getExpiryStatus(a.expiryDate) === 'normal').length,
-    warning: filteredAssets.filter(a => getExpiryStatus(a.expiryDate) === 'warning').length,
-  };
-
-  const handleAddClick = () => {
-    setEditingId(null);
-    setFormData({
-      name: '',
-      type: '',
-      department: '정보화사업처',
-      status: '정상',
-      expiryDate: '',
-      category: '',
-      location: ''
-    });
-    setShowModal(true);
-  };
-
-  const handleEditClick = (asset) => {
-    setEditingId(asset.id);
-    setFormData(asset);
-    setShowModal(true);
-  };
-
-  const handleSave = () => {
-    if (!formData.name || !formData.expiryDate) {
-      alert('자산명과 만료일을 입력해주세요.');
+  const handleSubmit = (e) => {
+    e.preventDefault();
+    
+    const validation = validateAsset(formData);
+    if (!validation.isValid) {
+      setErrors(validation.errors);
       return;
     }
     
-    if (editingId) {
-      setAssets(assets.map(a => a.id === editingId ? { ...formData, id: editingId } : a));
-    } else {
-      setAssets([...assets, { ...formData, id: Math.max(...assets.map(a => a.id), 0) + 1 }]);
-    }
-    setShowModal(false);
+    setErrors([]);
+    onSave(formData);
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm('이 자산을 삭제하시겠습니까?')) {
-      setAssets(assets.filter(a => a.id !== id));
-    }
-  };
+  const today = new Date().toISOString().split('T')[0];
 
   return (
-    <div style={{ fontFamily: 'inherit', backgroundColor: '#f5f5f5', minHeight: '100vh', padding: '2rem 1.5rem' }}>
-      {/* Header */}
-      <div style={{ marginBottom: '2rem' }}>
-        <h1 style={{ fontSize: '28px', fontWeight: '500', color: '#1a1a1a', margin: '0 0 0.5rem', display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <i className="ti ti-asset" style={{ fontSize: '28px' }}></i>
-          자산 및 라이선스 관리 대시보드
-        </h1>
-        <p style={{ fontSize: '14px', color: '#666', margin: '0' }}>공기업 전산실 자산 통합 관리 시스템</p>
-      </div>
-
-      {/* 부서 선택 및 버튼 */}
-      <div style={{ display: 'flex', gap: '12px', marginBottom: '2rem', alignItems: 'center', flexWrap: 'wrap' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-          <label style={{ fontSize: '14px', fontWeight: '500', color: '#1a1a1a' }}>부서 선택:</label>
-          <select 
-            value={selectedDept}
-            onChange={(e) => setSelectedDept(e.target.value)}
-            style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #ddd', backgroundColor: '#fff', fontSize: '14px', cursor: 'pointer' }}
-          >
-            <option>전체</option>
-            {departments.map(d => <option key={d}>{d}</option>)}
-          </select>
-        </div>
-
-        {/* 알림 버튼들 */}
-        <div style={{ display: 'flex', gap: '8px', marginLeft: 'auto' }}>
-          <button
-            onClick={showBrowserNotification}
-            title="브라우저 알림"
-            style={{ padding: '8px 14px', backgroundColor: '#FF6B6B', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}
-          >
-            🔔 브라우저 알림
-          </button>
-          <button
-            onClick={sendEmailNotification}
-            title="이메일 알림"
-            style={{ padding: '8px 14px', backgroundColor: '#4ECDC4', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '6px', whiteSpace: 'nowrap' }}
-          >
-            📧 이메일 알림
-          </button>
-        </div>
-
-        <button
-          onClick={handleAddClick}
-          style={{ padding: '8px 16px', backgroundColor: '#185FA5', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: '500', display: 'flex', alignItems: 'center', gap: '6px' }}
-        >
-          <i className="ti ti-plus" style={{ fontSize: '16px' }}></i>
-          자산 추가
-        </button>
-      </div>
-
-      {/* 통계 카드 */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: '12px', marginBottom: '2rem' }}>
-        <div style={{ backgroundColor: '#f0f0f0', padding: '1rem', borderRadius: '8px', border: '1px solid #ddd' }}>
-          <p style={{ fontSize: '12px', color: '#666', margin: '0 0 8px', fontWeight: '500' }}>총 자산 수</p>
-          <p style={{ fontSize: '28px', fontWeight: '500', color: '#1a1a1a', margin: '0' }}>{stats.total}</p>
-        </div>
-        <div style={{ backgroundColor: '#f0f0f0', padding: '1rem', borderRadius: '8px', border: '1px solid #ddd' }}>
-          <p style={{ fontSize: '12px', color: '#666', margin: '0 0 8px', fontWeight: '500' }}>정상 운용</p>
-          <p style={{ fontSize: '28px', fontWeight: '500', color: '#3B6D11', margin: '0' }}>{stats.normal}</p>
-        </div>
-        <div style={{ backgroundColor: '#f0f0f0', padding: '1rem', borderRadius: '8px', border: '1px solid #ddd' }}>
-          <p style={{ fontSize: '12px', color: '#666', margin: '0 0 8px', fontWeight: '500' }}>만료 임박</p>
-          <p style={{ fontSize: '28px', fontWeight: '500', color: '#A32D2D', margin: '0' }}>{stats.warning}</p>
-        </div>
-      </div>
-
-      {/* 자산 리스트 */}
-      <div style={{ backgroundColor: '#fff', borderRadius: '12px', border: '1px solid #ddd', overflow: 'hidden' }}>
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '14px' }}>
-          <thead>
-            <tr style={{ backgroundColor: '#f0f0f0', borderBottom: '1px solid #ddd' }}>
-              <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '500', color: '#1a1a1a' }}>자산명</th>
-              <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '500', color: '#1a1a1a' }}>종류</th>
-              <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '500', color: '#1a1a1a' }}>부서</th>
-              <th style={{ padding: '12px 16px', textAlign: 'left', fontWeight: '500', color: '#1a1a1a' }}>만료일</th>
-              <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: '500', color: '#1a1a1a' }}>상태</th>
-              <th style={{ padding: '12px 16px', textAlign: 'center', fontWeight: '500', color: '#1a1a1a' }}>관리</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredAssets.length === 0 ? (
-              <tr>
-                <td colSpan="6" style={{ padding: '2rem', textAlign: 'center', color: '#999' }}>
-                  해당 부서의 자산이 없습니다.
-                </td>
-              </tr>
-            ) : (
-              filteredAssets.map(asset => {
-                const expiryStatus = getExpiryStatus(asset.expiryDate);
-                const days = daysUntilExpiry(asset.expiryDate);
-                return (
-                  <tr key={asset.id} style={{ borderBottom: '1px solid #f0f0f0', backgroundColor: expiryStatus === 'warning' ? 'rgba(232, 75, 74, 0.05)' : 'transparent' }}>
-                    <td style={{ padding: '12px 16px', color: '#1a1a1a' }}>
-                      {expiryStatus === 'warning' && <i className="ti ti-alert-triangle" style={{ color: '#A32D2D', marginRight: '6px', fontSize: '16px' }}></i>}
-                      {asset.name}
-                    </td>
-                    <td style={{ padding: '12px 16px', color: '#666', fontSize: '13px' }}>{asset.type}</td>
-                    <td style={{ padding: '12px 16px', color: '#666', fontSize: '13px' }}>{asset.department}</td>
-                    <td style={{ padding: '12px 16px', color: expiryStatus === 'warning' ? '#A32D2D' : '#1a1a1a' }}>
-                      {asset.expiryDate}
-                      {expiryStatus === 'warning' && <span style={{ marginLeft: '8px', fontSize: '12px', color: '#A32D2D', fontWeight: '500' }}>({days}일)</span>}
-                    </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'center' }}>
-                      <span style={{ 
-                        display: 'inline-block',
-                        padding: '4px 12px',
-                        borderRadius: '8px',
-                        fontSize: '12px',
-                        fontWeight: '500',
-                        backgroundColor: expiryStatus === 'warning' ? 'rgba(232, 75, 74, 0.1)' : 'rgba(99, 153, 34, 0.1)',
-                        color: expiryStatus === 'warning' ? '#A32D2D' : '#3B6D11'
-                      }}>
-                        {expiryStatus === 'warning' ? '만료 임박' : '정상'}
-                      </span>
-                    </td>
-                    <td style={{ padding: '12px 16px', textAlign: 'center', display: 'flex', gap: '8px', justifyContent: 'center' }}>
-                      <button
-                        onClick={() => handleEditClick(asset)}
-                        style={{ padding: '6px 12px', border: '1px solid #ddd', backgroundColor: 'transparent', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '4px', color: '#666' }}
-                      >
-                        <i className="ti ti-edit" style={{ fontSize: '14px' }}></i>
-                        수정
-                      </button>
-                      <button
-                        onClick={() => handleDelete(asset.id)}
-                        style={{ padding: '6px 12px', border: '1px solid #ddd', backgroundColor: 'transparent', borderRadius: '8px', cursor: 'pointer', fontSize: '13px', display: 'flex', alignItems: 'center', gap: '4px', color: '#A32D2D' }}
-                      >
-                        <i className="ti ti-trash" style={{ fontSize: '14px' }}></i>
-                        삭제
-                      </button>
-                    </td>
-                  </tr>
-                );
-              })
-            )}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Modal */}
-      {showModal && (
-        <div style={{ 
-          position: 'fixed', 
-          top: 0, 
-          left: 0, 
-          right: 0, 
-          bottom: 0, 
-          backgroundColor: 'rgba(0, 0, 0, 0.5)', 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center',
-          zIndex: 1000
-        }}>
-          <div style={{ 
-            backgroundColor: '#fff', 
-            borderRadius: '12px',
-            padding: '2rem',
-            maxWidth: '500px',
-            width: '90%',
-            boxShadow: '0 4px 20px rgba(0, 0, 0, 0.15)',
-            maxHeight: '90vh',
-            overflowY: 'auto'
-          }}>
-            <h2 style={{ fontSize: '18px', fontWeight: '500', color: '#1a1a1a', margin: '0 0 1.5rem' }}>
-              {editingId ? '자산 수정' : '새 자산 등록'}
-            </h2>
-
-            <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
-              <div>
-                <label style={{ fontSize: '13px', fontWeight: '500', color: '#1a1a1a', display: 'block', marginBottom: '4px' }}>자산명 *</label>
-                <input
-                  type="text"
-                  value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-                  placeholder="자산명을 입력하세요"
-                  style={{ width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' }}
-                />
-              </div>
-
-              <div>
-                <label style={{ fontSize: '13px', fontWeight: '500', color: '#1a1a1a', display: 'block', marginBottom: '4px' }}>자산 종류</label>
-                <input
-                  type="text"
-                  value={formData.type}
-                  onChange={(e) => setFormData({ ...formData, type: e.target.value })}
-                  placeholder="예: 컴퓨터, 소프트웨어, 네트워크 장비"
-                  style={{ width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' }}
-                />
-              </div>
-
-              <div>
-                <label style={{ fontSize: '13px', fontWeight: '500', color: '#1a1a1a', display: 'block', marginBottom: '4px' }}>관리 부서 *</label>
-                <select
-                  value={formData.department}
-                  onChange={(e) => setFormData({ ...formData, department: e.target.value })}
-                  style={{ width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' }}
-                >
-                  {departments.map(d => <option key={d}>{d}</option>)}
-                </select>
-              </div>
-
-              <div>
-                <label style={{ fontSize: '13px', fontWeight: '500', color: '#1a1a1a', display: 'block', marginBottom: '4px' }}>만료일 *</label>
-                <input
-                  type="date"
-                  value={formData.expiryDate}
-                  onChange={(e) => setFormData({ ...formData, expiryDate: e.target.value })}
-                  style={{ width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' }}
-                />
-              </div>
-
-              <div>
-                <label style={{ fontSize: '13px', fontWeight: '500', color: '#1a1a1a', display: 'block', marginBottom: '4px' }}>카테고리</label>
-                <select
-                  value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
-                  style={{ width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' }}
-                >
-                  <option value="">선택하세요</option>
-                  <option>하드웨어</option>
-                  <option>소프트웨어</option>
-                  <option>라이선스</option>
-                  <option>인프라</option>
-                  <option>사무용품</option>
-                  <option>서비스</option>
-                </select>
-              </div>
-
-              <div>
-                <label style={{ fontSize: '13px', fontWeight: '500', color: '#1a1a1a', display: 'block', marginBottom: '4px' }}>위치</label>
-                <input
-                  type="text"
-                  value={formData.location}
-                  onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                  placeholder="예: 4층, 1층 서버실"
-                  style={{ width: '100%', padding: '8px 12px', border: '1px solid #ddd', borderRadius: '8px', fontSize: '14px', boxSizing: 'border-box' }}
-                />
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: '12px', marginTop: '2rem', justifyContent: 'flex-end' }}>
-              <button
-                onClick={() => setShowModal(false)}
-                style={{ padding: '8px 16px', border: '1px solid #ddd', backgroundColor: 'transparent', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: '500', color: '#666' }}
-              >
-                취소
-              </button>
-              <button
-                onClick={handleSave}
-                style={{ padding: '8px 16px', backgroundColor: '#185FA5', color: '#fff', border: 'none', borderRadius: '8px', cursor: 'pointer', fontSize: '14px', fontWeight: '500' }}
-              >
-                {editingId ? '수정' : '저장'}
-              </button>
-            </div>
+    <div style={styles.modalOverlay} onClick={onClose}>
+      <div style={styles.modal} onClick={(e) => e.stopPropagation()}>
+        <h2>{asset ? '자산 수정' : '새 자산 추가'}</h2>
+        
+        {errors.length > 0 && (
+          <div style={styles.errorBox}>
+            {errors.map((error, idx) => (
+              <p key={idx} style={{ color: '#d9534f', margin: '5px 0' }}>
+                • {error}
+              </p>
+            ))}
           </div>
-        </div>
-      )}
+        )}
+
+        <form onSubmit={handleSubmit}>
+          <div style={styles.formGroup}>
+            <label>자산명 *</label>
+            <input 
+              name="name" 
+              placeholder="자산명" 
+              value={formData.name} 
+              onChange={handleChange}
+              maxLength="100"
+              required 
+              style={styles.input} 
+            />
+            <small style={{ color: '#999' }}>
+              {formData.name.length}/100
+            </small>
+          </div>
+
+          <div style={styles.formGroup}>
+            <label>자산 종류 *</label>
+            <input 
+              name="type" 
+              placeholder="자산 종류" 
+              value={formData.type} 
+              onChange={handleChange}
+              maxLength="100"
+              required 
+              style={styles.input} 
+            />
+            <small style={{ color: '#999' }}>
+              {formData.type.length}/100
+            </small>
+          </div>
+
+          <div style={styles.formGroup}>
+            <label>부서 *</label>
+            <select
+              name="department"
+              value={formData.department}
+              onChange={handleChange}
+              required
+              style={styles.input}
+            >
+              <option value="">부서 선택</option>
+              <option value="정보화사업처">정보화사업처</option>
+              <option value="경영지원실">경영지원실</option>
+              <option value="홍보실">홍보실</option>
+            </select>
+          </div>
+
+          <div style={styles.formGroup}>
+            <label>만료일 *</label>
+            <input 
+              name="expiryDate" 
+              type="date" 
+              value={formData.expiryDate} 
+              onChange={handleChange}
+              min={today}
+              required 
+              style={styles.input} 
+            />
+            <small style={{ color: '#999' }}>
+              오늘 이후의 날짜를 선택해주세요.
+            </small>
+          </div>
+
+          <div style={styles.formGroup}>
+            <label>위치 *</label>
+            <input 
+              name="location" 
+              placeholder="위치" 
+              value={formData.location} 
+              onChange={handleChange}
+              maxLength="100"
+              required 
+              style={styles.input} 
+            />
+            <small style={{ color: '#999' }}>
+              {formData.location.length}/100
+            </small>
+          </div>
+
+          <div style={styles.buttonGroup}>
+            <button type="submit" style={styles.submitButton}>저장</button>
+            <button type="button" onClick={onClose} style={styles.cancelButton}>취소</button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
 
-// React 앱 렌더링
-const root = ReactDOM.createRoot(document.getElementById('root'));
-root.render(<AssetDashboard />);
+const styles = {
+  container: { maxWidth: '1200px', margin: '0 auto', padding: '20px' },
+  header: { textAlign: 'center', marginBottom: '30px' },
+  toolbar: { display: 'flex', gap: '10px', marginBottom: '20px', flexWrap: 'wrap' },
+  select: { padding: '8px 12px', borderRadius: '4px', border: '1px solid #ddd' },
+  addButton: { padding: '8px 16px', background: '#2ECC71', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' },
+  statsContainer: { display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: '15px', marginBottom: '30px' },
+  statCard: { padding: '20px', background: '#f8f9fa', borderRadius: '8px', borderLeft: '4px solid #2ECC71', textAlign: 'center' },
+  statValue: { fontSize: '28px', fontWeight: 'bold', color: '#2ECC71' },
+  statLabel: { color: '#666', marginTop: '8px' },
+  tableContainer: { overflowX: 'auto', marginBottom: '30px' },
+  table: { width: '100%', borderCollapse: 'collapse', background: 'white' },
+  tableHeader: { background: '#34495E', color: 'white' },
+  tableRow: { borderBottom: '1px solid #ddd' },
+  warningRow: { background: '#FFE5E5' },
+  actionButton: { padding: '4px 8px', marginRight: '5px', background: '#3498DB', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' },
+  deleteButton: { padding: '4px 8px', background: '#E74C3C', color: 'white', border: 'none', borderRadius: '3px', cursor: 'pointer' },
+  modalOverlay: { position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, background: 'rgba(0,0,0,0.5)', display: 'flex', alignItems: 'center', justifyContent: 'center' },
+  modal: { background: 'white', padding: '30px', borderRadius: '8px', maxWidth: '500px', width: '90%' },
+  formGroup: { marginBottom: '15px' },
+  input: { width: '100%', padding: '8px', marginTop: '5px', border: '1px solid #ddd', borderRadius: '4px', boxSizing: 'border-box' },
+  buttonGroup: { display: 'flex', gap: '10px' },
+  submitButton: { flex: 1, padding: '8px', background: '#2ECC71', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' },
+  cancelButton: { flex: 1, padding: '8px', background: '#95A5A6', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' },
+  errorBox: { backgroundColor: '#f8d7da', border: '1px solid #f5c6cb', borderRadius: '4px', padding: '12px', marginBottom: '15px', color: '#721c24' }
+};
+
+ReactDOM.render(<AssetDashboard />, document.getElementById('root'));
