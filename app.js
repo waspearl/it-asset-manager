@@ -83,6 +83,28 @@ function AssetDashboard() {
     localStorage.setItem('assets', JSON.stringify(assets));
   }, [assets]);
 
+  // 🔔 페이지 진입 시 자동으로 브라우저 알림 (한 번만)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      if ('Notification' in window) {
+        // 이미 권한이 있으면 바로 알림 표시
+        if (Notification.permission === 'granted') {
+          showBrowserNotification();
+        } 
+        // 아직 권한을 묻지 않았으면 권한 요청
+        else if (Notification.permission !== 'denied') {
+          Notification.requestPermission().then(permission => {
+            if (permission === 'granted') {
+              showBrowserNotification();
+            }
+          });
+        }
+      }
+    }, 500); // 페이지 로드 후 0.5초 후에 표시
+
+    return () => clearTimeout(timer);
+  }, []); // 페이지 진입 시 한 번만 실행
+
   // 🔔 브라우저 알림 함수
   const showBrowserNotification = () => {
     if ('Notification' in window) {
