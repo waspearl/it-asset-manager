@@ -224,6 +224,7 @@ ${emailContent.message}
     return JSON.parse(localStorage.getItem('notificationLogs') || '[]');
   };
   const [selectedDept, setSelectedDept] = useState('전체');
+  const [filterStatus, setFilterStatus] = useState('전체'); // 🔒 추가: 만료 상태 필터
   const [showModal, setShowModal] = useState(false);
   const [editingId, setEditingId] = useState(null);
   const [formData, setFormData] = useState({
@@ -236,16 +237,33 @@ ${emailContent.message}
     location: ''
   });
 
-  const filteredAssets = selectedDept === '전체'
-    ? assets
-    : assets.filter(a => a.department === selectedDept);
-
   const daysUntilExpiry = (dateStr) => {
     const today = new Date();
     const expiry = new Date(dateStr);
     const diff = Math.ceil((expiry - today) / (1000 * 60 * 60 * 24));
     return diff;
   };
+
+  // 🔒 부서별 필터링
+  let filteredAssets = selectedDept === '전체'
+    ? assets
+    : assets.filter(a => a.department === selectedDept);
+
+  // 🔒 만료 상태별 필터링
+  if (filterStatus !== '전체') {
+    filteredAssets = filteredAssets.filter(a => {
+      const days = daysUntilExpiry(a.expiryDate);
+      
+      if (filterStatus === '정상') {
+        return days > 30;
+      } else if (filterStatus === '만료임박') {
+        return days <= 30 && days > 0;
+      } else if (filterStatus === '만료됨') {
+        return days <= 0;
+      }
+      return true;
+    });
+  }
 
   const getExpiryStatus = (dateStr) => {
     const days = daysUntilExpiry(dateStr);
@@ -354,6 +372,21 @@ ${emailContent.message}
           >
             <option>전체</option>
             {departments.map(d => <option key={d}>{d}</option>)}
+          </select>
+        </div>
+
+        {/* 🔒 만료 상태 필터 */}
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <label style={{ fontSize: '14px', fontWeight: '500', color: '#1a1a1a' }}>만료 상태:</label>
+          <select 
+            value={filterStatus}
+            onChange={(e) => setFilterStatus(e.target.value)}
+            style={{ padding: '8px 12px', borderRadius: '8px', border: '1px solid #ddd', backgroundColor: '#fff', fontSize: '14px', cursor: 'pointer' }}
+          >
+            <option value="전체">전체</option>
+            <option value="정상">정상</option>
+            <option value="만료임박">만료 임박 (30일 이내)</option>
+            <option value="만료됨">만료됨</option>
           </select>
         </div>
 
